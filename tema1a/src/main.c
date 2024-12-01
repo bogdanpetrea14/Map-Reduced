@@ -7,6 +7,7 @@
 int main(int argc, char **argv)
 {
     Arguments args;
+    Threads threads;
 
     if (argc != 4)
     {
@@ -15,6 +16,7 @@ int main(int argc, char **argv)
     }
 
     init_all(&args, argv);
+    alloc_threads(&threads, &args);
 
 
     return 0;

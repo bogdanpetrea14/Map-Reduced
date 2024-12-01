@@ -19,6 +19,18 @@ void alloc_threads(Threads *threads, Arguments *args)
     }
     threads->reducers_count = args->reducers;
 
+    threads->mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t) * args->number_of_files);
+    if (threads->mutex == NULL) {
+        perror("malloc");
+        exit(1);
+    }
+
+    threads->barrier = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t) * args->number_of_files);
+    if (threads->barrier == NULL) {
+        perror("malloc");
+        exit(1);
+    }
+
     return;
 }
 
@@ -45,6 +57,8 @@ void read_main_file(Arguments *arguments)
             exit(1);
         }
         fscanf(file, "%s", arguments->files[i]);
+
+        arguments->status[i] = -1;
     }
 
     fclose(file);
@@ -56,5 +70,11 @@ void init_all(Arguments *arguments, char **argv)
     arguments->mappers = atoi(argv[1]);
     arguments->reducers = atoi(argv[2]);
     arguments->file = argv[3];
+    arguments->status = (int *)malloc(sizeof(int) * arguments->number_of_files);
+    if (arguments->status == NULL) {
+        perror("malloc");
+        exit(1);
+    }
+
     read_main_file(arguments);
 }
