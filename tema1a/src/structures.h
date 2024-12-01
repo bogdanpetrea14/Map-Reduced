@@ -1,6 +1,8 @@
 #ifndef STRUCTURES_H
 #define STRUCTURES_H
 
+#define LIST_SIZE 1024
+
 typedef struct {
     int mappers;
     int reducers;
@@ -18,5 +20,10 @@ typedef struct {
     int mappers_count;
     int reducers_count;
 } Threads;
+
+typedef struct {
+    char *word;
+    char *file;
+} Word;
 
 #endif // STRUCTURES_H

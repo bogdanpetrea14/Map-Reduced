@@ -18,6 +18,13 @@ int main(int argc, char **argv)
     init_all(&args, argv);
     alloc_threads(&threads, &args);
 
+    int total_threads = args.mappers + args.reducers;
+
+    // create a map, that has the following correspondence:
+    // file_name -> list of words
+    
+
+
 
     return 0;
 }

@@ -78,3 +78,9 @@ void init_all(Arguments *arguments, char **argv)
 
     read_main_file(arguments);
 }
+
+
+// function given for the mapper threads
+// read the file and for each new word found, we create a pair
+// {word, file_ID} and we add it to the list
+// after finishing the file, the thread will close it
