@@ -19,22 +19,40 @@ int main(int argc, char **argv) {
     alloc_threads(&threads, &args);
     init_files(&files, &args);
 
-    // init the barrier
-    pthread_barrier_init(&threads.barrier, NULL, args.mappers);
+    // Inițializare barrier pentru sincronizare
+    pthread_barrier_init(&threads.barrier, NULL, args.mappers + args.reducers);
 
-    // init mutex
+    // Inițializare mutex
     pthread_mutex_init(&threads.mutex, NULL);
 
-    // Inițializare argumente pentru fiecare thread Mapper
+    // Inițializare argumente pentru thread-urile Mapper
     MapperArgs mapper_args;
     mapper_args.args = &args;
     mapper_args.files = &files;
     mapper_args.threads = &threads;
 
+    // Inițializare argumente pentru thread-urile Reducer
+    ReducerArgs reducer_args;
+    reducer_args.args = &args;
+    reducer_args.files = &files;
+    reducer_args.threads = &threads;
+    for (int i = 0; i < 26; i++) {
+        reducer_args.letters[i].taken_letter = 0;
+        reducer_args.letters[i].letter = 'a' + i;
+    }
+
     // Crearea thread-urilor Mapper
     for (int i = 0; i < args.mappers; i++) {
         if (pthread_create(&threads.mappers[i], NULL, mappers_function, &mapper_args) != 0) {
-            perror("pthread_create");
+            perror("pthread_create mapper");
+            exit(1);
+        }
+    }
+
+    // Crearea thread-urilor Reducer
+    for (int i = 0; i < args.reducers; i++) {
+        if (pthread_create(&threads.reducers[i], NULL, reducers_function, &reducer_args) != 0) {
+            perror("pthread_create reducer");
             exit(1);
         }
     }
@@ -42,21 +60,24 @@ int main(int argc, char **argv) {
     // Așteptarea thread-urilor Mapper
     for (int i = 0; i < args.mappers; i++) {
         if (pthread_join(threads.mappers[i], NULL) != 0) {
-            perror("pthread_join");
+            perror("pthread_join mapper");
             exit(1);
         }
     }
 
-    // Aici trebuie implementată partea pentru Reducers (Reduce phase)
-    // print the pairs
-    // for (int i = 0; i < files.size; i++) {
-    //     for (int j = 0; j < files.lists[i].size; j++) {
-    //         printf("%s %d\n", files.lists[i].pairs[j].word, files.lists[i].pairs[j].file_id);
-    //     }
-    // }
+    // Așteptarea thread-urilor Reducer
+    for (int i = 0; i < args.reducers; i++) {
+        if (pthread_join(threads.reducers[i], NULL) != 0) {
+            perror("pthread_join reducer");
+            exit(1);
+        }
+    }
 
     // Eliberare resurse
     for (int i = 0; i < files.size; i++) {
+        for (int j = 0; j < files.lists[i].size; j++) {
+            free(files.lists[i].pairs[j].word);
+        }
         free(files.lists[i].pairs);
     }
     free(files.lists);
@@ -64,6 +85,8 @@ int main(int argc, char **argv) {
     free(threads.mappers);
     free(threads.reducers);
     free(args.status);
+    pthread_mutex_destroy(&threads.mutex);
+    pthread_barrier_destroy(&threads.barrier);
 
     return 0;
 }

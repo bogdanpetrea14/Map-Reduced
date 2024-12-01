@@ -45,4 +45,23 @@ typedef struct {
     Arguments *args;
 } MapperArgs;
 
+typedef struct {
+    char *word;
+    int* in_files;
+    int size;
+} ReducerPair;
+
+typedef struct {
+    int taken_letter; // 0 - not taken, 1 - taken
+    char letter;
+} Letter;
+
+typedef struct {
+    Files *files;
+    Threads *threads;
+    Arguments *args;
+    ReducerPair *pairs;
+    Letter letters[26];
+} ReducerArgs;
+
 #endif // STRUCTURES_H

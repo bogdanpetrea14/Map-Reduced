@@ -111,12 +111,8 @@ void* mappers_function(void* arguments) {
         }
 
         // open the file
-        printf("Processing %s\n", main_args->files[i]);
-        // concatenate ../checker/" with the file name
-        char file_name[100];
-        strcpy(file_name, "../checker/");
-        strcat(file_name, main_args->files[i]);
-        FILE *file = fopen(file_name, "r");
+        
+        FILE *file = fopen(main_args->files[i], "r");
         if (file == NULL) {
             perror("fopen2");
             exit(1);
@@ -129,11 +125,38 @@ void* mappers_function(void* arguments) {
         // for those like that's, we will use thats
         while (fscanf(file, "%s", word) != EOF) {
             for (int j = 0; j < strlen(word); j++) {
-                if (word[j] == '.' || word[j] == ',' || word[j] == '?' || word[j] == '!' || word[j] == ';' || word[j] == ':') {
+                if (word[j] == '.' || 
+                    word[j] == ',' || 
+                    word[j] == '?' || 
+                    word[j] == '!' || 
+                    word[j] == ';' || 
+                    word[j] == ':') {
                     word[j] = '\0';
                     break;
                 }
                 word[j] = tolower(word[j]);
+            }
+
+            // check if the word is already in the list of pairs
+            int found = 0;
+            for (int j = 0; j < files->lists[i].size; j++) {
+                if (strcmp(files->lists[i].pairs[j].word, word) == 0) {
+                    found = 1;
+                    break;
+                }
+            }
+
+            if (found == 1) {
+                continue;
+            }
+
+            // realloc if needed
+            if (files->lists[i].size == LIST_SIZE) {
+                files->lists[i].pairs = (Pair *)realloc(files->lists[i].pairs, sizeof(Pair) * (files->lists[i].size + LIST_SIZE));
+                if (files->lists[i].pairs == NULL) {
+                    perror("realloc1");
+                    exit(1);
+                }
             }
 
             // add the word to the list of pairs
@@ -162,4 +185,113 @@ void* mappers_function(void* arguments) {
 
     // wait for all the threads to finish processing the files
     pthread_barrier_wait(&threads->barrier);
+}
+
+void* reducers_function(void* arguments) {
+    ReducerArgs *args = (ReducerArgs *)arguments;
+    Files *files = args->files;
+    Threads *threads = args->threads;
+    Letter *letters = args->letters;
+
+    // Iterăm prin literele alfabetului pentru reducere
+    for (int i = 0; i < 26; i++) {
+        // Verificăm dacă litera a fost deja procesată
+        pthread_mutex_lock(&threads->mutex);
+        if (letters[i].taken_letter) {
+            pthread_mutex_unlock(&threads->mutex);
+            continue;
+        }
+        letters[i].taken_letter = 1; // Marcăm litera ca fiind procesată
+        char current_letter = letters[i].letter;
+        pthread_mutex_unlock(&threads->mutex);
+
+        // Creăm un fișier de ieșire pentru litera curentă
+        char filename[10];
+        snprintf(filename, sizeof(filename), "%c.txt", current_letter);
+        FILE *output_file = fopen(filename, "w");
+        if (!output_file) {
+            perror("fopen reducer output");
+            exit(1);
+        }
+
+        // Hash map pentru agregare {word -> {file_id1, file_id2, ...}}
+        ReducerPair aggregated_words[LIST_SIZE];
+        int aggregated_count = 0;
+
+        // Iterăm prin toate listele parțiale și agregăm cuvintele care încep cu litera curentă
+        for (int j = 0; j < files->size; j++) {
+            List *list = &files->lists[j];
+            for (int k = 0; k < list->size; k++) {
+                char *word = list->pairs[k].word;
+                int file_id = list->pairs[k].file_id;
+
+                // Verificăm dacă cuvântul începe cu litera curentă
+                if (tolower(word[0]) != current_letter) {
+                    continue;
+                }
+
+                // Căutăm cuvântul în lista agregată
+                int found = 0;
+                for (int l = 0; l < aggregated_count; l++) {
+                    if (strcmp(aggregated_words[l].word, word) == 0) {
+                        // Adăugăm ID-ul fișierului dacă nu există deja
+                        int duplicate = 0;
+                        for (int m = 0; m < aggregated_words[l].size; m++) {
+                            if (aggregated_words[l].in_files[m] == file_id) {
+                                duplicate = 1;
+                                break;
+                            }
+                        }
+                        if (!duplicate) {
+                            aggregated_words[l].in_files[aggregated_words[l].size++] = file_id;
+                        }
+                        found = 1;
+                        break;
+                    }
+                }
+
+                // Dacă cuvântul nu există în lista agregată, îl adăugăm
+                if (!found) {
+                    aggregated_words[aggregated_count].word = strdup(word);
+                    aggregated_words[aggregated_count].in_files = (int *)malloc(sizeof(int) * LIST_SIZE);
+                    aggregated_words[aggregated_count].in_files[0] = file_id;
+                    aggregated_words[aggregated_count].size = 1;
+                    aggregated_count++;
+                }
+            }
+        }
+
+        // Sortăm cuvintele în ordine descrescătoare după numărul de fișiere în care apar
+        for (int l = 0; l < aggregated_count - 1; l++) {
+            for (int m = l + 1; m < aggregated_count; m++) {
+                if (aggregated_words[l].size < aggregated_words[m].size ||
+                    (aggregated_words[l].size == aggregated_words[m].size &&
+                     strcmp(aggregated_words[l].word, aggregated_words[m].word) > 0)) {
+                    ReducerPair temp = aggregated_words[l];
+                    aggregated_words[l] = aggregated_words[m];
+                    aggregated_words[m] = temp;
+                }
+            }
+        }
+
+        // Scriem rezultatele în fișierul de ieșire
+        for (int l = 0; l < aggregated_count; l++) {
+            fprintf(output_file, "%s:[", aggregated_words[l].word);
+            for (int m = 0; m < aggregated_words[l].size; m++) {
+                fprintf(output_file, "%d", aggregated_words[l].in_files[m]);
+                if (m < aggregated_words[l].size - 1) {
+                    fprintf(output_file, " ");
+                }
+            }
+            fprintf(output_file, "]\n");
+
+            // Eliberăm memoria alocată pentru cuvânt și lista de fișiere
+            free(aggregated_words[l].word);
+            free(aggregated_words[l].in_files);
+        }
+
+        fclose(output_file);
+    }
+
+    pthread_exit(NULL);
 }
