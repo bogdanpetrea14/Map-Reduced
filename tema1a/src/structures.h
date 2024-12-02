@@ -33,7 +33,7 @@ typedef struct {
 } Mapper;
 
 typedef struct {
-    vector<char> letters; // literele de la a la z
+    vector<pair<char, int>> letters; // literele de la a la z
     vector<pair<string, vector<int>>> words;
     Threads* threads;
     Arguments* arguments;

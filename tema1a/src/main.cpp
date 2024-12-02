@@ -25,21 +25,31 @@ int main(int argc, char* argv[]) {
     reducer.threads = &threads;
     reducer.mapper = &mapper;
 
-    for (int i = 0; i < threads.number_of_mappers; i++) {
-        pthread_create(&threads.mappers[i], NULL, mapper_function, &mapper);
-    }
+    int r;
 
-
-    for (int i = 0; i < threads.number_of_mappers; i++) {
-        pthread_join(threads.mappers[i], NULL);
+    int total_threads = threads.number_of_mappers + threads.number_of_reducers;
+    for (int i = 0; i < total_threads; i++) {
+        if (i < threads.number_of_mappers) {
+            r = pthread_create(&threads.mappers[i], NULL, mapper_function, &mapper);
+        } else {
+            r = pthread_create(&threads.reducers[i - threads.number_of_mappers], NULL, reducer_function, &reducer);
+        }
+        if (r) {
+            cout << "Error creating thread " << i << "\n";
+            return -1;
+        }
     }
     
-    for (int i = 0; i < threads.number_of_reducers; i++) {
-        pthread_create(&threads.reducers[i], NULL, reducer_function, &reducer);
-    }
-
-    for (int i = 0; i < threads.number_of_reducers; i++) {
-        pthread_join(threads.reducers[i], NULL);
+    for (int i = 0; i < total_threads; i++) {
+        if (i < threads.number_of_mappers) {
+            r = pthread_join(threads.mappers[i], NULL);
+        } else {
+            r = pthread_join(threads.reducers[i - threads.number_of_mappers], NULL);
+        }
+        if (r) {
+            cout << "Error joining thread " << i << "\n";
+            return -1;
+        }
     }
 
     cleanup_threads(&threads);

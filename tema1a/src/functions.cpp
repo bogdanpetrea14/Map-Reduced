@@ -4,6 +4,7 @@
 #include <cctype>
 #include <algorithm>
 #include <stdexcept>
+#include <unordered_map>
 
 using namespace std;
 
@@ -13,7 +14,7 @@ void alloc_threads(Arguments* arguments, Threads* threads) {
     threads->mappers = new pthread_t[threads->number_of_mappers];
     threads->reducers = new pthread_t[threads->number_of_reducers];
     pthread_mutex_init(&threads->mutex, NULL);
-    pthread_barrier_init(&threads->barrier, NULL, threads->number_of_mappers);
+    pthread_barrier_init(&threads->barrier, NULL, threads->number_of_mappers + threads->number_of_reducers);
 }
 
 void cleanup_threads(Threads* threads) {
@@ -90,9 +91,10 @@ void* mapper_function(void* arg) {
 }
 
 // Inițializează literele alfabetului
-void initialize_letters(vector<char>& letters) {
+void initialize_letters(vector<pair<char, int>>& letters)
+{
     for (char c = 'a'; c <= 'z'; c++) {
-        letters.push_back(c);
+        letters.push_back(pair<char, int>(c, 0));
     }
 }
 
@@ -100,42 +102,53 @@ void initialize_letters(vector<char>& letters) {
 vector<pair<string, vector<int>>> aggregate_words_for_letter(
     char letter,
     const vector<vector<pair<string, int>>>& files
-) {
+)
+{
     vector<pair<string, vector<int>>> words_for_letter;
+
+    unordered_map<string, vector<int>> word_map;
 
     for (const auto& file : files) {
         for (const auto& word_pair : file) {
             if (word_pair.first[0] == letter) {
-                auto it = find_if(words_for_letter.begin(), words_for_letter.end(),
-                                  [&word_pair](const pair<string, vector<int>>& entry) {
-                                      return entry.first == word_pair.first;
-                                  });
-                if (it != words_for_letter.end()) {
-                    if (find(it->second.begin(), it->second.end(), word_pair.second) == it->second.end()) {
-                        it->second.push_back(word_pair.second);
-                    }
-                } else {
-                    words_for_letter.emplace_back(word_pair.first, vector<int>{word_pair.second});
+                // Adăugăm word_pair.second doar dacă nu există deja
+                if (word_map[word_pair.first].empty() || 
+                    find(word_map[word_pair.first].begin(), word_map[word_pair.first].end(), word_pair.second) == word_map[word_pair.first].end()) {
+                    word_map[word_pair.first].push_back(word_pair.second);
                 }
             }
         }
+    }
+
+    // Convertim `unordered_map` în `vector<pair<string, vector<int>>>` pentru a păstra ieșirea compatibilă
+    for (const auto& [word, indices] : word_map) {
+        words_for_letter.emplace_back(word, indices);
     }
     return words_for_letter;
 }
 
 // Sortează cuvintele descrescător după numărul de fișiere și alfabetic
-void sort_words(vector<pair<string, vector<int>>>& words) {
-    sort(words.begin(), words.end(),
-         [](const pair<string, vector<int>>& a, const pair<string, vector<int>>& b) {
-             if (a.second.size() != b.second.size()) {
-                 return a.second.size() > b.second.size();
-             }
-             return a.first < b.first;
-         });
+void sort_words(vector<pair<string, vector<int>>>& words)
+{
+    // Comparator optimizat
+    auto comparator = [](const pair<string, vector<int>>& a, const pair<string, vector<int>>& b) {
+        size_t size_a = a.second.size();
+        size_t size_b = b.second.size();
+
+        if (size_a != size_b) {
+            return size_a > size_b; // Ordine descrescătoare după mărimea vectorului
+        }
+        return a.first < b.first; // Ordine lexicografică pentru egalități
+    };
+
+    // Sortare
+    sort(words.begin(), words.end(), comparator);
 }
 
+
 // Scrie rezultatele într-un fișier
-void write_to_file(char letter, const vector<pair<string, vector<int>>>& words_for_letter) {
+void write_to_file(char letter, const vector<pair<string, vector<int>>>& words_for_letter)
+{
     ofstream out_file(string(1, letter) + ".txt");
 
     for (const auto& entry : words_for_letter) {
@@ -155,12 +168,21 @@ void write_to_file(char letter, const vector<pair<string, vector<int>>>& words_f
 // Funcția principală a reducerului
 void* reducer_function(void* arg) {
     Reducer* reducer = (Reducer*)arg;
+    Threads* threads = reducer->threads;
+    pthread_barrier_wait(&threads->barrier);
 
     // Inițializează literele alfabetului
     initialize_letters(reducer->letters);
-
-    // Parcurge fiecare literă și procesează cuvintele asociate
-    for (char letter : reducer->letters) {
+    
+    for (int i = 0; i < reducer->letters.size(); i++) {
+        pthread_mutex_lock(&threads->mutex);
+        char letter = reducer->letters[i].first;
+        if (reducer->letters[i].second) {
+            pthread_mutex_unlock(&threads->mutex);
+            continue;
+        }
+        pthread_mutex_unlock(&threads->mutex);
+        reducer->letters[i].second = 1;
         // Agregare cuvinte pentru litera curentă
         vector<pair<string, vector<int>>> words_for_letter =
             aggregate_words_for_letter(letter, reducer->mapper->files);
@@ -171,6 +193,25 @@ void* reducer_function(void* arg) {
         // Scriere în fișier
         write_to_file(letter, words_for_letter);
     }
+
+    // Parcurge fiecare literă și procesează cuvintele asociate
+    // for (char letter : reducer->letters) {
+    //     if (taken_letters[letter - 'a']) {
+    //         continue;
+    //     }
+    //     pthread_mutex_lock(&threads->mutex);
+    //     taken_letters[letter - 'a'] = 1;
+    //     pthread_mutex_unlock(&threads->mutex);
+    //     // Agregare cuvinte pentru litera curentă
+    //     vector<pair<string, vector<int>>> words_for_letter =
+    //         aggregate_words_for_letter(letter, reducer->mapper->files);
+
+    //     // Sortare cuvinte
+    //     sort_words(words_for_letter);
+
+    //     // Scriere în fișier
+    //     write_to_file(letter, words_for_letter);
+    // }
 
     return NULL;
 }
