@@ -1,6 +1,0 @@
-Fatal error: glibc detected an invalid stdio handle
-timeout: the monitored command dumped core
-Aborted
-real 0.22
-user 0.00
-sys 0.00

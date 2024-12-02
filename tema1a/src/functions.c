@@ -40,6 +40,12 @@ void read_main_file(Arguments *arguments)
         exit(1);
     }
 
+    arguments->status = (int *)malloc(sizeof(int) * arguments->number_of_files);
+    if (arguments->status == NULL) {
+        perror("malloc7");
+        exit(1);
+    }
+
     for (int i = 0; i < arguments->number_of_files; i++) {
         arguments->files[i] = (char *)malloc(sizeof(char) * 100);
         if (arguments->files[i] == NULL) {
@@ -61,12 +67,6 @@ void init_all(Arguments *arguments, char **argv)
     arguments->mappers = atoi(argv[1]);
     arguments->reducers = atoi(argv[2]);
     arguments->file = argv[3];
-    arguments->status = (int *)malloc(sizeof(int) * arguments->number_of_files);
-    if (arguments->status == NULL) {
-        perror("malloc7");
-        exit(1);
-    }
-
     read_main_file(arguments);
 }
 
@@ -105,13 +105,10 @@ void* mappers_function(void* arguments) {
         
         // here, we know for sure that the file is not processed
         // so we lock the mutex
-        if (pthread_mutex_lock(&threads->mutex) != 0) {
-            perror("pthread_mutex_lock");
-            exit(1);
-        }
+        pthread_mutex_lock(&threads->mutex);
 
-        // open the file
-        
+        // open the file        
+
         FILE *file = fopen(main_args->files[i], "r");
         if (file == NULL) {
             perror("fopen2");
@@ -120,7 +117,6 @@ void* mappers_function(void* arguments) {
 
         // read the file and process it
         char word[100];
-        
         // we take one word at a time, make it lowercase
         // for those like that's, we will use thats
         while (fscanf(file, "%s", word) != EOF) {
@@ -149,7 +145,6 @@ void* mappers_function(void* arguments) {
             if (found == 1) {
                 continue;
             }
-
             // realloc if needed
             if (files->lists[i].size == LIST_SIZE) {
                 files->lists[i].pairs = (Pair *)realloc(files->lists[i].pairs, sizeof(Pair) * (files->lists[i].size + LIST_SIZE));
@@ -177,14 +172,11 @@ void* mappers_function(void* arguments) {
         main_args->status[i] = 1;
         
         // unlock the mutex
-        if (pthread_mutex_unlock(&threads->mutex) != 0) {
-            perror("pthread_mutex_unlock");
-            exit(1);
-        }
+        pthread_mutex_unlock(&threads->mutex);
     }
-
     // wait for all the threads to finish processing the files
     pthread_barrier_wait(&threads->barrier);
+    pthread_exit(NULL);
 }
 
 void* reducers_function(void* arguments) {
@@ -215,7 +207,12 @@ void* reducers_function(void* arguments) {
         }
 
         // Hash map pentru agregare {word -> {file_id1, file_id2, ...}}
-        ReducerPair aggregated_words[LIST_SIZE];
+        ReducerPair *aggregated_words;
+        aggregated_words = (ReducerPair *)malloc(sizeof(ReducerPair) * LIST_SIZE);
+        if (!aggregated_words) {
+            perror("Error allocating aggregated_words in ReducerArgs");
+            exit(1);
+        }
         int aggregated_count = 0;
 
         // Iterăm prin toate listele parțiale și agregăm cuvintele care încep cu litera curentă

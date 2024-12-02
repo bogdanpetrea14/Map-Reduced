@@ -18,9 +18,13 @@ int main(int argc, char **argv) {
     init_all(&args, argv);
     alloc_threads(&threads, &args);
     init_files(&files, &args);
+    // print args threads and files
+    // printf("args: %d %d %s %d\n", args.mappers, args.reducers, args.file, args.number_of_files);
+    // printf("threads: %d %d\n", threads.mappers_count, threads.reducers_count);
+    // printf("files: %d\n", files.size);
 
     // Inițializare barrier pentru sincronizare
-    pthread_barrier_init(&threads.barrier, NULL, args.mappers + args.reducers);
+    pthread_barrier_init(&threads.barrier, NULL, args.mappers);
 
     // Inițializare mutex
     pthread_mutex_init(&threads.mutex, NULL);
@@ -36,9 +40,18 @@ int main(int argc, char **argv) {
     reducer_args.args = &args;
     reducer_args.files = &files;
     reducer_args.threads = &threads;
+
+    // Inițializare pentru fiecare literă
     for (int i = 0; i < 26; i++) {
         reducer_args.letters[i].taken_letter = 0;
         reducer_args.letters[i].letter = 'a' + i;
+    }
+
+    // Asigură-te că pairs este inițializat dacă e necesar
+    reducer_args.pairs = malloc(sizeof(ReducerPair) * LIST_SIZE);
+    if (!reducer_args.pairs) {
+        perror("Error allocating pairs in ReducerArgs");
+        exit(1);
     }
 
     // Crearea thread-urilor Mapper
