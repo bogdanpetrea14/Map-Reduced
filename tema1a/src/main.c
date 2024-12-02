@@ -18,10 +18,6 @@ int main(int argc, char **argv) {
     init_all(&args, argv);
     alloc_threads(&threads, &args);
     init_files(&files, &args);
-    // print args threads and files
-    // printf("args: %d %d %s %d\n", args.mappers, args.reducers, args.file, args.number_of_files);
-    // printf("threads: %d %d\n", threads.mappers_count, threads.reducers_count);
-    // printf("files: %d\n", files.size);
 
     // Inițializare barrier pentru sincronizare
     pthread_barrier_init(&threads.barrier, NULL, args.mappers);

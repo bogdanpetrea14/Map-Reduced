@@ -1,7 +1,7 @@
 #ifndef STRUCTURES_H
 #define STRUCTURES_H
 
-#define LIST_SIZE 20000
+#define LIST_SIZE 200000
 
 typedef struct {
     int mappers;

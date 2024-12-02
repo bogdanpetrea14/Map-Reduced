@@ -106,7 +106,7 @@ void* mappers_function(void* arguments) {
         // here, we know for sure that the file is not processed
         // so we lock the mutex
         pthread_mutex_lock(&threads->mutex);
-
+        main_args->status[i] = 0;
         // open the file        
 
         FILE *file = fopen(main_args->files[i], "r");
@@ -130,6 +130,13 @@ void* mappers_function(void* arguments) {
                     word[j] = '\0';
                     break;
                 }
+                // if the word is that's, we will have thats
+                if (word[j] == '\'') {
+                    word[j] = word[j + 1];
+                    word[j + 1] = '\0';
+                    break;
+                }
+
                 word[j] = tolower(word[j]);
             }
 
