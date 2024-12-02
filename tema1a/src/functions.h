@@ -1,8 +1,22 @@
-#include "structures.h"
+#ifndef FUNCTIONS_H
+#define FUNCTIONS_H
 
-void alloc_threads(Threads *threads, Arguments *args);
-void read_main_file(Arguments *arguments);
-void init_all(Arguments *arguments, char **argv);
-void init_files(Files *files, Arguments *args);
-void* mappers_function(void* arguments);
-void* reducers_function(void* arguments);
+#include "structures.h"
+#include <string>
+#include <vector>
+
+// Funcții pentru inițializare
+void init_arguments(char** argv, Arguments* arguments);
+void alloc_threads(Arguments* arguments, Threads* threads);
+void readMainFile(Arguments& arguments);
+
+// Funcțiile mapper
+void* mapper_function(void* arg);
+
+// Funcțiile reducer
+void* reducer_function(void* arg);
+
+// Funcție pentru eliberarea resurselor
+void cleanup_threads(Threads* threads);
+
+#endif  // FUNCTIONS_H

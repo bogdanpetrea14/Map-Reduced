@@ -1,16 +1,20 @@
 #ifndef STRUCTURES_H
 #define STRUCTURES_H
 
-#define LIST_SIZE 200000
+#include <string>
+#include <vector>
+#include <utility>
+#include <pthread.h>  // Pentru pthread_t, pthread_mutex_t, pthread_barrier_t
+
+using namespace std;
 
 typedef struct {
-    int mappers;
-    int reducers;
-    char *file;
+    string main_file;
     int number_of_files;
-    char **files;
-    int *status; // -1 - not processed, 0 - processing, 1 - processed
-    int file_number;
+    int no_of_mappers;
+    int no_of_reducers;
+    vector<pair<string, int>> files;
+    vector<bool> status; // 0 - not processed, 1 - processed
 } Arguments;
 
 typedef struct {
@@ -18,50 +22,22 @@ typedef struct {
     pthread_t* reducers;
     pthread_mutex_t mutex;
     pthread_barrier_t barrier;
-    int mappers_count;
-    int reducers_count;
+    int number_of_mappers;
+    int number_of_reducers;
 } Threads;
 
 typedef struct {
-    char *word;
-    int file_id;
-} Pair;
+    vector<vector<pair<string, int>>> files;
+    Threads* threads;
+    Arguments* arguments;
+} Mapper;
 
 typedef struct {
-    Pair *pairs;
-    char *file_name;
-    int file_id;
-    int size;
-} List;
+    vector<char> letters; // literele de la a la z
+    vector<pair<string, vector<int>>> words;
+    Threads* threads;
+    Arguments* arguments;
+    Mapper* mapper;
+} Reducer;
 
-typedef struct {
-    List *lists;
-    int size;
-} Files;
-
-typedef struct {
-    Files *files;
-    Threads *threads;
-    Arguments *args;
-} MapperArgs;
-
-typedef struct {
-    char *word;
-    int* in_files;
-    int size;
-} ReducerPair;
-
-typedef struct {
-    int taken_letter; // 0 - not taken, 1 - taken
-    char letter;
-} Letter;
-
-typedef struct {
-    Files *files;
-    Threads *threads;
-    Arguments *args;
-    ReducerPair *pairs;
-    Letter letters[26];
-} ReducerArgs;
-
-#endif // STRUCTURES_H
+#endif  // STRUCTURES_H
