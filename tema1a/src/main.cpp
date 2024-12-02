@@ -29,12 +29,13 @@ int main(int argc, char* argv[]) {
         pthread_create(&threads.mappers[i], NULL, mapper_function, &mapper);
     }
 
-    for (int i = 0; i < threads.number_of_reducers; i++) {
-        pthread_create(&threads.reducers[i], NULL, reducer_function, &reducer);
-    }
 
     for (int i = 0; i < threads.number_of_mappers; i++) {
         pthread_join(threads.mappers[i], NULL);
+    }
+    
+    for (int i = 0; i < threads.number_of_reducers; i++) {
+        pthread_create(&threads.reducers[i], NULL, reducer_function, &reducer);
     }
 
     for (int i = 0; i < threads.number_of_reducers; i++) {

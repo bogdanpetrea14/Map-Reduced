@@ -89,64 +89,87 @@ void* mapper_function(void* arg) {
     return NULL;
 }
 
+// Inițializează literele alfabetului
+void initialize_letters(vector<char>& letters) {
+    for (char c = 'a'; c <= 'z'; c++) {
+        letters.push_back(c);
+    }
+}
+
+// Agregă cuvintele din mapper pentru o literă specifică
+vector<pair<string, vector<int>>> aggregate_words_for_letter(
+    char letter,
+    const vector<vector<pair<string, int>>>& files
+) {
+    vector<pair<string, vector<int>>> words_for_letter;
+
+    for (const auto& file : files) {
+        for (const auto& word_pair : file) {
+            if (word_pair.first[0] == letter) {
+                auto it = find_if(words_for_letter.begin(), words_for_letter.end(),
+                                  [&word_pair](const pair<string, vector<int>>& entry) {
+                                      return entry.first == word_pair.first;
+                                  });
+                if (it != words_for_letter.end()) {
+                    if (find(it->second.begin(), it->second.end(), word_pair.second) == it->second.end()) {
+                        it->second.push_back(word_pair.second);
+                    }
+                } else {
+                    words_for_letter.emplace_back(word_pair.first, vector<int>{word_pair.second});
+                }
+            }
+        }
+    }
+    return words_for_letter;
+}
+
+// Sortează cuvintele descrescător după numărul de fișiere și alfabetic
+void sort_words(vector<pair<string, vector<int>>>& words) {
+    sort(words.begin(), words.end(),
+         [](const pair<string, vector<int>>& a, const pair<string, vector<int>>& b) {
+             if (a.second.size() != b.second.size()) {
+                 return a.second.size() > b.second.size();
+             }
+             return a.first < b.first;
+         });
+}
+
+// Scrie rezultatele într-un fișier
+void write_to_file(char letter, const vector<pair<string, vector<int>>>& words_for_letter) {
+    ofstream out_file(string(1, letter) + ".txt");
+
+    for (const auto& entry : words_for_letter) {
+        out_file << entry.first << ":[";
+
+        for (size_t i = 0; i < entry.second.size(); i++) {
+            out_file << entry.second[i] + 1; // ID-urile sunt incrementate cu 1
+            if (i < entry.second.size() - 1) {
+                out_file << " ";
+            }
+        }
+
+        out_file << "]" << endl;
+    }
+}
+
+// Funcția principală a reducerului
 void* reducer_function(void* arg) {
     Reducer* reducer = (Reducer*)arg;
-    Arguments* arguments = reducer->arguments;
-    Threads* threads = reducer->threads;
-    Mapper* mapper = reducer->mapper;
 
-    // Inițializare reducer pentru litere
-    for (char c = 'a'; c <= 'z'; c++) {
-        reducer->letters.push_back(c);
-    }
+    // Inițializează literele alfabetului
+    initialize_letters(reducer->letters);
 
-    for (char c : reducer->letters) {
-        vector<pair<string, vector<int>>> words_for_letter;
+    // Parcurge fiecare literă și procesează cuvintele asociate
+    for (char letter : reducer->letters) {
+        // Agregare cuvinte pentru litera curentă
+        vector<pair<string, vector<int>>> words_for_letter =
+            aggregate_words_for_letter(letter, reducer->mapper->files);
 
-        // Agregare cuvinte din mapper
-        for (const auto& file : mapper->files) {
-            for (const auto& word_pair : file) {
-                if (word_pair.first[0] == c) {
-                    auto it = find_if(words_for_letter.begin(), words_for_letter.end(),
-                                      [&word_pair](const pair<string, vector<int>>& entry) {
-                                          return entry.first == word_pair.first;
-                                      });
-                    if (it != words_for_letter.end()) {
-                        if (find(it->second.begin(), it->second.end(), word_pair.second) == it->second.end()) {
-                            it->second.push_back(word_pair.second);
-                        }
-                    } else {
-                        words_for_letter.emplace_back(word_pair.first, vector<int>{word_pair.second});
-                    }
-                }
-            }
-        }
+        // Sortare cuvinte
+        sort_words(words_for_letter);
 
-        // Sortare descrescătoare după numărul de fișiere și alfabetic
-        sort(words_for_letter.begin(), words_for_letter.end(),
-             [](const pair<string, vector<int>>& a, const pair<string, vector<int>>& b) {
-                 if (a.second.size() != b.second.size()) {
-                     return a.second.size() > b.second.size();
-                 }
-                 return a.first < b.first;
-             });
-
-        // Creare fișier pentru litera curentă
-        ofstream out_file(string(1, c) + ".txt");
-
-        // Scriere în fișier (chiar dacă este gol)
-        if (!words_for_letter.empty()) {
-            for (const auto& entry : words_for_letter) {
-                out_file << entry.first << ":[";
-                for (size_t i = 0; i < entry.second.size(); i++) {
-                    out_file << entry.second[i] + 1; // ID-urile sunt incrementate cu 1
-                    if (i < entry.second.size() - 1) {
-                        out_file << " ";
-                    }
-                }
-                out_file << "]" << endl;
-            }
-        }
+        // Scriere în fișier
+        write_to_file(letter, words_for_letter);
     }
 
     return NULL;
