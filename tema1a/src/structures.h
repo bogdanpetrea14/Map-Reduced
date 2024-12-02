@@ -14,7 +14,7 @@ typedef struct {
     int no_of_mappers;
     int no_of_reducers;
     vector<pair<string, int>> files;
-    vector<bool> status; // 0 - not processed, 1 - processed
+    vector<bool> status = vector<bool>(false); // 0 - not processed, 1 - processed
 } Arguments;
 
 typedef struct {

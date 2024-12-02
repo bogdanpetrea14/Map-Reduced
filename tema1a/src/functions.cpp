@@ -36,7 +36,6 @@ void readMainFile(Arguments& arguments) {
 
     for (int i = 0; i < arguments.number_of_files; i++) {
         main_file >> arguments.files[i].first;
-        arguments.status[i] = false;
     }
 }
 
@@ -105,7 +104,6 @@ vector<pair<string, vector<int>>> aggregate_words_for_letter(
 )
 {
     vector<pair<string, vector<int>>> words_for_letter;
-
     unordered_map<string, vector<int>> word_map;
 
     for (const auto& file : files) {
@@ -170,7 +168,7 @@ void* reducer_function(void* arg) {
     Reducer* reducer = (Reducer*)arg;
     Threads* threads = reducer->threads;
     pthread_barrier_wait(&threads->barrier);
-
+    vector<pair<string, vector<int>>> words_for_letter;
     // Inițializează literele alfabetului
     initialize_letters(reducer->letters);
     
@@ -181,10 +179,10 @@ void* reducer_function(void* arg) {
             pthread_mutex_unlock(&threads->mutex);
             continue;
         }
-        pthread_mutex_unlock(&threads->mutex);
         reducer->letters[i].second = 1;
+        pthread_mutex_unlock(&threads->mutex);
         // Agregare cuvinte pentru litera curentă
-        vector<pair<string, vector<int>>> words_for_letter =
+        words_for_letter =
             aggregate_words_for_letter(letter, reducer->mapper->files);
 
         // Sortare cuvinte
@@ -193,25 +191,6 @@ void* reducer_function(void* arg) {
         // Scriere în fișier
         write_to_file(letter, words_for_letter);
     }
-
-    // Parcurge fiecare literă și procesează cuvintele asociate
-    // for (char letter : reducer->letters) {
-    //     if (taken_letters[letter - 'a']) {
-    //         continue;
-    //     }
-    //     pthread_mutex_lock(&threads->mutex);
-    //     taken_letters[letter - 'a'] = 1;
-    //     pthread_mutex_unlock(&threads->mutex);
-    //     // Agregare cuvinte pentru litera curentă
-    //     vector<pair<string, vector<int>>> words_for_letter =
-    //         aggregate_words_for_letter(letter, reducer->mapper->files);
-
-    //     // Sortare cuvinte
-    //     sort_words(words_for_letter);
-
-    //     // Scriere în fișier
-    //     write_to_file(letter, words_for_letter);
-    // }
 
     return NULL;
 }
