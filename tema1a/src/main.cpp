@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
     reducer.mapper = &mapper;
 
     int r;
-
+    
     int total_threads = threads.number_of_mappers + threads.number_of_reducers;
     for (int i = 0; i < total_threads; i++) {
         if (i < threads.number_of_mappers) {

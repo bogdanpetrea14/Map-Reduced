@@ -36,6 +36,7 @@ void readMainFile(Arguments& arguments) {
 
     for (int i = 0; i < arguments.number_of_files; i++) {
         main_file >> arguments.files[i].first;
+        arguments.files[i].second = i;
     }
 }
 
@@ -44,6 +45,9 @@ void init_arguments(char** argv, Arguments* arguments) {
     arguments->no_of_reducers = atoi(argv[2]);
     arguments->main_file = argv[3];
     readMainFile(*arguments);
+    for (int i = 0; i < arguments->number_of_files; i++) {
+        arguments->remaining_files.push_back(arguments->files[i]);
+    }
 }
 
 void* mapper_function(void* arg) {
@@ -51,16 +55,13 @@ void* mapper_function(void* arg) {
     Arguments* arguments = mapper->arguments;
     Threads* threads = mapper->threads;
     int file_id;
-
+    
     while (true) {
-        pthread_mutex_lock(&threads->mutex);
         file_id = -1;
-        for (int i = 0; i < arguments->number_of_files; i++) {
-            if (!arguments->status[i]) {
-                file_id = i;
-                arguments->status[i] = true;
-                break;
-            }
+        pthread_mutex_lock(&threads->mutex);
+        if (!arguments->remaining_files.empty()) {
+            file_id = arguments->remaining_files.back().second;
+            arguments->remaining_files.pop_back();
         }
         pthread_mutex_unlock(&threads->mutex);
 
@@ -77,11 +78,11 @@ void* mapper_function(void* arg) {
                     processed_word += tolower(c);
                 }
             }
+            pthread_mutex_lock(&threads->mutex);
             if (!processed_word.empty()) {
-                pthread_mutex_lock(&threads->mutex);
                 mapper->files[file_id].push_back(make_pair(processed_word, file_id));
-                pthread_mutex_unlock(&threads->mutex);
             }
+            pthread_mutex_unlock(&threads->mutex);
         }
     }
 
@@ -163,32 +164,35 @@ void write_to_file(char letter, const vector<pair<string, vector<int>>>& words_f
     }
 }
 
-// Funcția principală a reducerului
 void* reducer_function(void* arg) {
     Reducer* reducer = (Reducer*)arg;
     Threads* threads = reducer->threads;
+
+    vector<pair<char, vector<pair<string, vector<int>>>>> grouped_words(26); // 26 litere
     pthread_barrier_wait(&threads->barrier);
-    vector<pair<string, vector<int>>> words_for_letter;
-    // Inițializează literele alfabetului
     initialize_letters(reducer->letters);
-    
-    for (int i = 0; i < reducer->letters.size(); i++) {
+
+    // Agregare paralelă pe litere
+    while (true) {
+        char letter = '\0';
+        
         pthread_mutex_lock(&threads->mutex);
-        char letter = reducer->letters[i].first;
-        if (reducer->letters[i].second) {
-            pthread_mutex_unlock(&threads->mutex);
-            continue;
+        for (auto& letter_pair : reducer->letters) {
+            if (!letter_pair.second) { // Necesar procesare
+                letter = letter_pair.first;
+                letter_pair.second = 1; // Marcăm ca procesat
+                break;
+            }
         }
-        reducer->letters[i].second = 1;
         pthread_mutex_unlock(&threads->mutex);
-        // Agregare cuvinte pentru litera curentă
-        words_for_letter =
-            aggregate_words_for_letter(letter, reducer->mapper->files);
+        if (letter == '\0') {
+            break; // Toate literele au fost procesate
+        }
 
-        // Sortare cuvinte
+        
+        // Agregare și sortare pentru literă curentă
+        auto words_for_letter = aggregate_words_for_letter(letter, reducer->mapper->files);
         sort_words(words_for_letter);
-
-        // Scriere în fișier
         write_to_file(letter, words_for_letter);
     }
 
