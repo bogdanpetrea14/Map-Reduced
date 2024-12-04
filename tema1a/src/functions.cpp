@@ -168,32 +168,44 @@ void* reducer_function(void* arg) {
     Reducer* reducer = (Reducer*)arg;
     Threads* threads = reducer->threads;
 
+    // 26 de litere (a-z) în alfabet
+    const int total_letters = 26;
+    const int letters_per_thread = 4; // Fiecare thread va prelucra 4 litere
+
     vector<pair<char, vector<pair<string, vector<int>>>>> grouped_words(26); // 26 litere
     pthread_barrier_wait(&threads->barrier);
     initialize_letters(reducer->letters);
 
-    // Agregare paralelă pe litere
+    // Începem procesarea literei pe intervale
     while (true) {
-        char letter = '\0';
-        
+        char start_letter = '\0';
+        int range_start = -1;
+
         pthread_mutex_lock(&threads->mutex);
-        for (auto& letter_pair : reducer->letters) {
-            if (!letter_pair.second) { // Necesar procesare
-                letter = letter_pair.first;
-                letter_pair.second = 1; // Marcăm ca procesat
+        for (int i = 0; i < total_letters; ++i) {
+            if (!reducer->letters[i].second) { // Căutăm litera neprocesată
+                start_letter = reducer->letters[i].first;
+                range_start = i;
+                reducer->letters[i].second = 1; // Marcăm litera ca procesată
                 break;
             }
         }
         pthread_mutex_unlock(&threads->mutex);
-        if (letter == '\0') {
+
+        if (start_letter == '\0') {
             break; // Toate literele au fost procesate
         }
 
-        
-        // Agregare și sortare pentru literă curentă
-        auto words_for_letter = aggregate_words_for_letter(letter, reducer->mapper->files);
-        sort_words(words_for_letter);
-        write_to_file(letter, words_for_letter);
+        // Calculăm intervalul de litere care va fi procesat de acest thread
+        int range_end = min(range_start + letters_per_thread - 1, total_letters - 1);
+
+        // Agregăm cuvintele pentru fiecare literă din intervalul [range_start, range_end]
+        for (int i = range_start; i <= range_end; ++i) {
+            char letter = reducer->letters[i].first;
+            auto words_for_letter = aggregate_words_for_letter(letter, reducer->mapper->files);
+            sort_words(words_for_letter);
+            write_to_file(letter, words_for_letter);
+        }
     }
 
     return NULL;
